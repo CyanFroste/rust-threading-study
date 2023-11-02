@@ -1,14 +1,14 @@
 use std::{
     error::Error,
-    io::{Read, Seek, Write},
+    io::{self, Read, Seek, Write},
     sync::{Arc, RwLock},
     thread,
 };
 
-pub fn read_write_to_same_file() -> Result<(), Box<dyn Error>> {
-    const NUM_THREADS: usize = 2;
-    const NUM_ADDITIONS: usize = 10;
+const NUM_THREADS: usize = 2;
+const NUM_ADDITIONS: usize = 10;
 
+pub fn read_write_to_same_file() -> Result<(), Box<dyn Error>> {
     // `my_file.txt` is a file with a number `x` spanning `n` lines
     //  eg. my_file.txt
     //  1
@@ -33,7 +33,7 @@ pub fn read_write_to_same_file() -> Result<(), Box<dyn Error>> {
         // Clone the Atomic Reference
         let file = file_ref.clone();
 
-        let handle = thread::spawn(move || {
+        let handle = thread::spawn(move || -> io::Result<()> {
             for _ in 0..NUM_ADDITIONS {
                 // let mut file = file.lock().expect("Deadlock must have occured!"); // Mutex
                 let mut file = file.write().unwrap();
@@ -61,19 +61,22 @@ pub fn read_write_to_same_file() -> Result<(), Box<dyn Error>> {
                     .join("\n");
 
                 // Clear file
-                file.set_len(0).unwrap();
+                file.set_len(0)?;
                 // Set cursor to beginning of file
-                file.rewind().unwrap();
+                file.rewind()?;
                 // Write to file
-                file.write(contents.as_bytes()).unwrap();
+                file.write(contents.as_bytes())?;
             }
+            Ok(())
         });
 
         handles.push(handle);
     }
 
     for handle in handles {
-        handle.join().unwrap();
+        if let Err(err) = handle.join() {
+            println!("{err:?}");
+        }
     }
 
     Ok(())
